@@ -1,3 +1,4 @@
+using System.IO;
 using KilrkrowLauncher.Detection;
 using KilrkrowLauncher.Models;
 

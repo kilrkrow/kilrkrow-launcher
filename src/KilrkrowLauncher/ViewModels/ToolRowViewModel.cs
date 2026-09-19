@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Input;
 using KilrkrowLauncher.Detection;
 using KilrkrowLauncher.Install;

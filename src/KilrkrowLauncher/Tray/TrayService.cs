@@ -12,7 +12,7 @@ internal sealed class TrayService : IDisposable
     {
         var uri = new Uri("pack://application:,,,/Assets/launcher.ico");
         Icon? ico;
-        using (var stream = Application.GetResourceStream(uri)?.Stream)
+        using (var stream = System.Windows.Application.GetResourceStream(uri)?.Stream)
             ico = stream is null ? null : new Icon(stream);
 
         if (ico is null)
