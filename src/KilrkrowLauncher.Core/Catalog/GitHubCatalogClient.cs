@@ -17,11 +17,58 @@ public sealed class GitHubCatalogClient
         _filter = filter;
     }
 
-    public static GitHubCatalogClient Create(HttpClient http, Func<string?>? tokenProvider = null)
+    public static GitHubCatalogClient Create(HttpClient http, Func<string?>? tokenProvider = null, string? cacheDirectory = null)
     {
-        var api = new GitHubHttpClient(http, tokenProvider);
-        var zip = new HttpZipEntryReader(http);
+        DiskEtagCache? etag = null;
+        IZipEntryReader zip = new HttpZipEntryReader(http);
+        if (!string.IsNullOrWhiteSpace(cacheDirectory))
+        {
+            etag = new DiskEtagCache(Path.Combine(cacheDirectory, "etag"));
+            zip = new CachingZipEntryReader(zip, Path.Combine(cacheDirectory, "zip-index"));
+        }
+
+        var api = new GitHubHttpClient(http, tokenProvider, etag);
         return new GitHubCatalogClient(api, new WindowsAssetFilter(zip));
+    }
+
+    /// <summary>
+    /// Latest Windows asset for this launcher repo. Used for the manifest
+    /// <c>launcher</c> field; SelfRepo is not skipped here.
+    /// </summary>
+    public async Task<CatalogLauncherInfo?> LoadSelfLauncherAsync(
+        string owner = DefaultOwner,
+        CancellationToken cancellationToken = default)
+    {
+        GitHubReleaseDto release;
+        try
+        {
+            release = await _api.GetJsonAsync<GitHubReleaseDto>(
+                "repos/" + owner + "/" + SelfRepo + "/releases/latest",
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (GitHubApiException ex) when (ex.StatusCode == 404)
+        {
+            return null;
+        }
+
+        var assets = (release.Assets ?? []).Select(a => new ReleaseAsset
+        {
+            Name = a.Name,
+            BrowserDownloadUrl = a.BrowserDownloadUrl,
+            Size = a.Size,
+            ContentType = a.ContentType
+        }).ToArray();
+
+        var pick = await _filter.PickAsync(assets, cancellationToken).ConfigureAwait(false);
+        if (pick is null)
+            return null;
+
+        return new CatalogLauncherInfo
+        {
+            Tag = release.TagName,
+            AssetUrl = pick.Asset.BrowserDownloadUrl,
+            Size = pick.Asset.Size
+        };
     }
 
     public async Task<IReadOnlyList<CatalogTool>> LoadPublicWindowsToolsAsync(

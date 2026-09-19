@@ -10,11 +10,13 @@ public sealed class GitHubHttpClient
 
     private readonly HttpClient _http;
     private readonly Func<string?> _tokenProvider;
+    private readonly DiskEtagCache? _etagCache;
 
-    public GitHubHttpClient(HttpClient http, Func<string?>? tokenProvider = null)
+    public GitHubHttpClient(HttpClient http, Func<string?>? tokenProvider = null, DiskEtagCache? etagCache = null)
     {
         _http = http;
         _tokenProvider = tokenProvider ?? (() => null);
+        _etagCache = etagCache;
         if (_http.BaseAddress is null)
             _http.BaseAddress = new Uri("https://api.github.com/");
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
@@ -26,10 +28,42 @@ public sealed class GitHubHttpClient
 
     public async Task<T> GetJsonAsync<T>(string relativeOrAbsolute, CancellationToken cancellationToken)
     {
-        using var response = await SendAsync(HttpMethod.Get, relativeOrAbsolute, cancellationToken).ConfigureAwait(false);
+        var uri = Resolve(relativeOrAbsolute);
+        var url = uri.ToString();
+        string? cachedEtag = null;
+        string? cachedBody = null;
+        _etagCache?.TryGet(url, out cachedEtag, out cachedBody);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        AttachAuth(request);
+        if (!string.IsNullOrWhiteSpace(cachedEtag))
+        {
+            try
+            {
+                request.Headers.IfNoneMatch.Add(EntityTagHeaderValue.Parse(cachedEtag));
+            }
+            catch
+            {
+                // ignore malformed cache etag
+            }
+        }
+
+        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotModified && cachedBody is not null)
+        {
+            var cached = JsonSerializer.Deserialize<T>(cachedBody, GitHubJson.Options);
+            if (cached is null)
+                throw new GitHubApiException(304, "GitHub 304 with empty cached body.");
+            return cached;
+        }
+
         await EnsureSuccessAsync(response).ConfigureAwait(false);
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var value = await JsonSerializer.DeserializeAsync<T>(stream, GitHubJson.Options, cancellationToken).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var etag = response.Headers.ETag?.ToString();
+        if (_etagCache is not null && !string.IsNullOrWhiteSpace(body))
+            _etagCache.Set(url, etag, body);
+
+        var value = JsonSerializer.Deserialize<T>(body, GitHubJson.Options);
         if (value is null)
             throw new GitHubApiException((int)response.StatusCode, "GitHub returned an empty JSON body.");
         return value;
@@ -37,16 +71,22 @@ public sealed class GitHubHttpClient
 
     public async Task<HttpResponseMessage> SendAsync(HttpMethod method, string relativeOrAbsolute, CancellationToken cancellationToken, HttpCompletionOption completion = HttpCompletionOption.ResponseContentRead)
     {
-        var uri = Uri.TryCreate(relativeOrAbsolute, UriKind.Absolute, out var abs)
+        var uri = Resolve(relativeOrAbsolute);
+        using var request = new HttpRequestMessage(method, uri);
+        AttachAuth(request);
+        return await _http.SendAsync(request, completion, cancellationToken).ConfigureAwait(false);
+    }
+
+    private Uri Resolve(string relativeOrAbsolute)
+        => Uri.TryCreate(relativeOrAbsolute, UriKind.Absolute, out var abs)
             ? abs
             : new Uri(_http.BaseAddress ?? new Uri("https://api.github.com/"), relativeOrAbsolute);
 
-        using var request = new HttpRequestMessage(method, uri);
+    private void AttachAuth(HttpRequestMessage request)
+    {
         var token = _tokenProvider();
         if (!string.IsNullOrWhiteSpace(token))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Trim());
-
-        return await _http.SendAsync(request, completion, cancellationToken).ConfigureAwait(false);
     }
 
     public static async Task EnsureSuccessAsync(HttpResponseMessage response)

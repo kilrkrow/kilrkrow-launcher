@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net.Http;
 using System.Windows;
 using KilrkrowLauncher.Catalog;
@@ -26,7 +27,9 @@ public partial class App : System.Windows.Application
         var settings = store.Load();
 
         _http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        var catalog = GitHubCatalogClient.Create(_http, () => settings.GitHubToken);
+        var cacheRoot = Path.Combine(folders.LocalAppData, "KilrkrowLauncher");
+        var manifest = new ManifestCatalogClient(_http, ManifestCatalogClient.DefaultCachePath(folders.LocalAppData));
+        var apiFallback = GitHubCatalogClient.Create(_http, () => settings.GitHubToken, cacheRoot);
         var detector = new InstallDetector(
             files,
             folders,
@@ -34,14 +37,14 @@ public partial class App : System.Windows.Application
             new WindowsUninstallRegistryProbe());
         var processes = new WindowsProcessHost();
         var launch = new LaunchService(processes);
-        var install = new GitHubReleaseInstallProvider(
-            new HttpFileDownloader(_http),
-            new WindowsInstallerRunner(),
-            folders,
-            files);
+        var downloader = new HttpFileDownloader(_http);
+        var runner = new WindowsInstallerRunner();
+        var install = new GitHubReleaseInstallProvider(downloader, runner, folders, files);
         _ = InstallProviders.CreateV1(install);
+        var selfUpdate = new LauncherSelfUpdater(downloader, runner);
 
-        var vm = new MainViewModel(catalog, detector, launch, install, processes, store, settings);
+        var vm = new MainViewModel(manifest, apiFallback, detector, launch, install, processes, selfUpdate, store, settings);
+        vm.ExitRequested += Shutdown;
         var window = new MainWindow(vm);
         _tray = new TrayService(
             window,

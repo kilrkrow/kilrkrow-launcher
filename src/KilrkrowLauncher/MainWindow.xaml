@@ -51,13 +51,17 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Button Style="{StaticResource GlassButton}" Content="Refresh catalog" Command="{Binding RefreshCommand}" Margin="0,0,10,0" />
                         <Button Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="Launch all" Command="{Binding LaunchAllCommand}"
                                 ToolTip="Starts checked tools that are already installed. Missing rows are skipped." />
-                        <TextBlock Grid.Column="3" Text="{Binding Status}" Foreground="{StaticResource Text2Brush}"
+                        <Button Grid.Column="2" Style="{StaticResource GlassButton}" Content="Update launcher" Margin="10,0,10,0"
+                                Command="{Binding UpdateLauncherCommand}"
+                                Visibility="{Binding UpdateAvailable, Mode=OneWay, Converter={x:Static vm:BoolToVis.Instance}}"
+                                ToolTip="Download the newer launcher asset and restart." />
+                        <TextBlock Grid.Column="3" Text="{Binding Status, Mode=OneWay}" Foreground="{StaticResource Text2Brush}"
                                    TextWrapping="Wrap" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                     </Grid>
                     <Expander Margin="0,10,0,0" Header="Optional GitHub token (local only, not required)"

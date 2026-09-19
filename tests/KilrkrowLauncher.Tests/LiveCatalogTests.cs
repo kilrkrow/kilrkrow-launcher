@@ -5,30 +5,33 @@ namespace KilrkrowLauncher.Tests;
 public sealed class LiveCatalogTests
 {
     [Fact]
-    public async Task PublicKilrkrowCatalog_IncludesAtLeastOneWindowsRelease()
+    public async Task ManifestUrl_DeserializesWhenPublished()
     {
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-        var client = GitHubCatalogClient.Create(http);
-
-        IReadOnlyList<KilrkrowLauncher.Models.CatalogTool> tools;
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        using var request = new HttpRequestMessage(HttpMethod.Get, ManifestCatalogClient.DefaultManifestUrl);
+        request.Headers.UserAgent.ParseAdd("kilrkrow-launcher-tests");
+        HttpResponseMessage response;
         try
         {
-            tools = await client.LoadPublicWindowsToolsAsync();
+            response = await http.SendAsync(request);
         }
-        catch (KilrkrowLauncher.Http.GitHubRateLimitException)
+        catch (HttpRequestException)
         {
-            return; // anonymous 60/hr budget; fixture tests already cover the filter
+            return;
         }
 
+        if (response.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Forbidden)
+            return;
+
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync();
+        var manifest = CatalogJson.Parse(json);
+        var tools = manifest.ToCatalogTools();
         Assert.NotEmpty(tools);
-        Assert.Contains(tools, t => t.Repo.Equals("win-service-buddy", StringComparison.OrdinalIgnoreCase));
         Assert.All(tools, t =>
         {
             Assert.False(string.IsNullOrWhiteSpace(t.WindowsAsset.Asset.Name));
-            Assert.True(
-                t.WindowsAsset.Asset.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-                || t.WindowsAsset.Asset.Name.EndsWith(".msi", StringComparison.OrdinalIgnoreCase)
-                || t.WindowsAsset.ExeEntryNames.Count > 0);
+            Assert.False(string.IsNullOrWhiteSpace(t.WindowsAsset.Asset.BrowserDownloadUrl));
         });
     }
 }

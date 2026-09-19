@@ -2,7 +2,21 @@
 
 Native **WPF** (`.NET 10`, same stack as [sideclip](https://github.com/kilrkrow/sideclip)) picker for public **kilrkrow** Windows tools. It is not a web/Electron shell and it does not auto-launch anything on startup.
 
-Public catalog works **without a GitHub token**. An optional token field is stored only under `%LocalAppData%\KilrkrowLauncher\settings.json` and is never committed.
+Public catalog works **without a GitHub token**. The launcher downloads one static `catalog.json` (GitHub Pages). An optional token is stored only under `%LocalAppData%\KilrkrowLauncher\settings.json` and is used only if the manifest is unreachable (API fallback).
+
+## Catalog (manifest)
+
+Discovery runs **server-side** in `.github/workflows/catalog.yml` (every 30 minutes, or **Actions → Catalog → Run workflow**). `tools/CatalogBuilder` reuses `GitHubCatalogClient` + `WindowsAssetFilter` (zip-contains-exe unchanged) with `GITHUB_TOKEN`, then publishes `catalog.json` to GitHub Pages.
+
+**Enable once (required for the happy path):** Repo **Settings → Pages → Build and deployment → Source: GitHub Actions**. Then run the Catalog workflow. The launcher GETs:
+
+`https://kilrkrow.github.io/kilrkrow-launcher/catalog.json`
+
+That GET is not counted against the GitHub REST rate limit. New tool releases appear within ~30 minutes, or immediately after a manual dispatch.
+
+On startup the launcher shows the last cached manifest from `%LocalAppData%\KilrkrowLauncher\catalog.json`, then refreshes in the background (ETag / If-None-Match). If Pages is down, it falls back to the live API with ETag + on-disk zip-index cache keyed by asset URL.
+
+The manifest `launcher` field is this repo's latest Windows release (self-update). If `launcher.tag` is newer than the running assembly, **Update launcher** downloads the asset and swaps/restarts.
 
 ## Catalog rules
 
@@ -16,7 +30,7 @@ A public, non-fork, non-archived repo is listed only when **`GET /repos/{owner}/
 | Source-only zip (`.cs`, `.md`, `*.exe.config`, no real `.exe`) | **No** |
 | `.nupkg`, `.js`, `.css`, empty `assets[]` | **No** |
 | Private repos (even if a token can see them) | **No** |
-| This launcher repo (`kilrkrow-launcher`) | Skipped |
+| This launcher repo (`kilrkrow-launcher`) | Skipped from **tools**; included under manifest `launcher` for self-update |
 
 When several Windows assets exist, the picker prefers MSI, then setup exe, then an **app/gui** zip over a **cli** zip.
 
@@ -73,10 +87,10 @@ dotnet test tests/KilrkrowLauncher.Tests/KilrkrowLauncher.Tests.csproj
 ## Smoke notes (greenfield)
 
 1. Cold start shows the picker (nothing auto-launches).
-2. Refresh catalog **without** a token: at least **win-service-buddy** appears if GitHub is reachable.
+2. Refresh catalog **without** a token: after Pages is enabled, at least **win-service-buddy** appears from `catalog.json`.
 3. An installed row: **Launch** starts it; a second Launch **focuses** the existing window.
 4. Check a missing row and an installed row, then **Launch all**: only the installed row starts.
 5. **Download & install** on a missing zip: progress appears; Cancel during download does not crash.
 6. MSI/admin tools show UAC; the launcher stays unelevated.
 
-Rate-limit 403/429 surfaces a wait message and points at the optional token setting.
+If the manifest is missing (Pages not enabled yet) the status line falls back to the API; 403/429 then surfaces a wait message.
