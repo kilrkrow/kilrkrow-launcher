@@ -209,10 +209,15 @@ public sealed class ToolRowViewModel : ObservableObject
     private IReadOnlyList<string> ProcessNames()
     {
         var names = new List<string>();
-        if (!string.IsNullOrWhiteSpace(_launchPath))
+        if (!string.IsNullOrWhiteSpace(_launchPath) && !PrimaryExePicker.IsNoiseName(_launchPath))
             names.Add(Path.GetFileNameWithoutExtension(_launchPath));
         foreach (var exe in Tool.WindowsAsset.ExeEntryNames)
+        {
+            if (PrimaryExePicker.IsNoiseName(exe))
+                continue;
             names.Add(Path.GetFileNameWithoutExtension(exe));
+        }
+
         return names.Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 }

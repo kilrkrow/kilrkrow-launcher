@@ -62,7 +62,7 @@ Name hints are tokens of **4+ characters** from the repo, asset stem, and zip ex
 - Download the chosen latest-release asset with progress and **Cancel** (cancel deletes the partial file).
 - `.msi` → visible `msiexec /i` (no `/qn`, `/quiet`, `/passive`, no `Verb=runas`).
 - Setup-named `.exe` → visible process; the installer's own manifest triggers UAC.
-- Portable `.exe` / zip-with-exe → extract or copy under the portable root.
+- Portable `.exe` / zip-with-exe → extract or copy under the portable root. The **primary exe picker** skips helpers (`createdump`, crashpad, uninstall, setup, vcredist, …) and prefers a filename that matches the repo / display name (Sideclip.zip with `createdump.exe` + `Sideclip.exe` launches Sideclip). Launch sets **WorkingDirectory** to the exe folder so self-contained .NET can load sibling DLLs. Failure shows the path and exception; it never claims success.
 
 The launcher itself is `asInvoker` (`app.manifest`). It never silently elevates. MSI / admin setups show a normal UAC prompt.
 
@@ -91,6 +91,7 @@ dotnet test tests/KilrkrowLauncher.Tests/KilrkrowLauncher.Tests.csproj
 3. An installed row: **Launch** starts it; a second Launch **focuses** the existing window.
 4. Check a missing row and an installed row, then **Launch all**: only the installed row starts.
 5. **Download & install** on a missing zip: progress appears; Cancel during download does not crash.
-6. MSI/admin tools show UAC; the launcher stays unelevated.
+6. **Sideclip** smoke: Download & install the win-x64 zip, then Launch. Staging has both `createdump.exe` and `Sideclip.exe`; Launch must start **Sideclip.exe** with cwd = that folder (sibling DLLs). A minidump means the picker still chose createdump.
+7. MSI/admin tools show UAC; the launcher stays unelevated.
 
 If the manifest is missing (Pages not enabled yet) the status line falls back to the API; 403/429 then surfaces a wait message.

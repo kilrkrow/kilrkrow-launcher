@@ -24,6 +24,22 @@ public sealed class GitHubReleaseInstallProviderTests
     }
 
     [Fact]
+    public async Task SideclipZip_PicksSideclipNotCreatedump()
+    {
+        var folders = new TempFolders();
+        var provider = new GitHubReleaseInstallProvider(
+            new MemoryDownloader { Bytes = FixtureZips.SideclipWithCreatedump() },
+            new RecordingRunner(),
+            folders,
+            new PhysicalFileProbe());
+
+        var result = await provider.InstallAsync(Sideclip(), progress: null, CancellationToken.None);
+        Assert.True(result.Succeeded);
+        Assert.Equal("Sideclip.exe", Path.GetFileName(result.LaunchPath));
+        Assert.DoesNotContain("createdump", result.LaunchPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task SourceOnlyZip_FailsWithoutFalseInstall()
     {
         var folders = new TempFolders();
@@ -132,6 +148,25 @@ public sealed class GitHubReleaseInstallProviderTests
                 Size = 10
             },
             ExeEntryNames = []
+        }
+    };
+
+    private static CatalogTool Sideclip() => new()
+    {
+        Owner = "kilrkrow",
+        Repo = "sideclip",
+        DisplayName = "Sideclip",
+        TagName = "v0.1.0",
+        HtmlUrl = "https://github.com/kilrkrow/sideclip",
+        WindowsAsset = new WindowsAssetPick
+        {
+            Asset = new ReleaseAsset
+            {
+                Name = "sideclip-win-x64-v0.1.0.zip",
+                BrowserDownloadUrl = "https://example.test/sideclip.zip",
+                Size = 10
+            },
+            ExeEntryNames = ["createdump.exe", "Sideclip.exe"]
         }
     };
 

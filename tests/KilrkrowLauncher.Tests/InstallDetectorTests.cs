@@ -90,6 +90,22 @@ public sealed class InstallDetectorTests
     }
 
     [Fact]
+    public void PortableCreatedump_DoesNotWinOverSideclip()
+    {
+        var folders = new FakeFolders();
+        var files = new FakeFiles();
+        var root = Path.Combine(InstallDetector.PortableRepoDir(folders, "sideclip"), "v0.1.0");
+        files.AddFile(Path.Combine(root, "createdump.exe"), size: 71_992);
+        files.AddFile(Path.Combine(root, "Sideclip.exe"), size: 180_224);
+
+        var detector = new InstallDetector(files, folders, new FakeStartMenu(), new FakeRegistry());
+        var hit = detector.Detect(Sideclip());
+        Assert.True(hit.IsInstalled);
+        Assert.Equal("Sideclip.exe", Path.GetFileName(hit.LaunchPath));
+        Assert.DoesNotContain("createdump", hit.LaunchPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Missing_WhenNothingMatches()
     {
         var detector = new InstallDetector(new FakeFiles(), new FakeFolders(), new FakeStartMenu(), new FakeRegistry());
@@ -116,6 +132,25 @@ public sealed class InstallDetectorTests
         }
     };
 
+    private static CatalogTool Sideclip() => new()
+    {
+        Owner = "kilrkrow",
+        Repo = "sideclip",
+        DisplayName = "Sideclip",
+        TagName = "v0.1.0",
+        HtmlUrl = "https://github.com/kilrkrow/sideclip",
+        WindowsAsset = new WindowsAssetPick
+        {
+            Asset = new ReleaseAsset
+            {
+                Name = "sideclip-win-x64-v0.1.0.zip",
+                BrowserDownloadUrl = "https://example.test/sideclip.zip",
+                Size = 10
+            },
+            ExeEntryNames = ["createdump.exe", "Sideclip.exe"]
+        }
+    };
+
     private sealed class FakeFolders : ISpecialFolders
     {
         public string LocalAppData { get; } = Path.Combine(Path.GetTempPath(), "kl-detect", "local");
@@ -131,15 +166,25 @@ public sealed class InstallDetectorTests
     {
         private readonly HashSet<string> _files = new(StringComparer.OrdinalIgnoreCase);
 
-        public void AddFile(string path) => _files.Add(path);
+        private readonly Dictionary<string, long> _sizes = new(StringComparer.OrdinalIgnoreCase);
+
+        public void AddFile(string path, long size = 0)
+        {
+            _files.Add(path);
+            _sizes[path] = size;
+        }
 
         public bool FileExists(string path) => _files.Contains(path);
 
+        public long FileLength(string path) => _sizes.TryGetValue(path, out var n) ? n : 0;
+
         public IEnumerable<string> EnumerateFiles(string directory, string searchPattern, SearchOption option)
         {
+            // Alphabetical so createdump.exe would win a naive FirstOrDefault.
             return _files.Where(f =>
                 f.StartsWith(directory.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(Path.GetDirectoryName(f), directory, StringComparison.OrdinalIgnoreCase));
+                || string.Equals(Path.GetDirectoryName(f), directory, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(f => f, StringComparer.OrdinalIgnoreCase);
         }
     }
 

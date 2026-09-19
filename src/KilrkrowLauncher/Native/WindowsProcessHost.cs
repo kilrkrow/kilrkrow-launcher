@@ -59,15 +59,20 @@ internal sealed class WindowsProcessHost : IProcessHost
         SetForegroundWindow(process.MainWindowHandle);
     }
 
-    public void Start(string path, bool useShellExecute, string? arguments = null)
+    public void Start(string path, bool useShellExecute, string? workingDirectory, string? arguments = null)
     {
+        var cwd = string.IsNullOrWhiteSpace(workingDirectory)
+            ? Path.GetDirectoryName(path) ?? Environment.CurrentDirectory
+            : workingDirectory;
         var info = new ProcessStartInfo
         {
             FileName = path,
             Arguments = arguments ?? "",
             UseShellExecute = useShellExecute,
-            WorkingDirectory = Path.GetDirectoryName(path) ?? Environment.CurrentDirectory
+            WorkingDirectory = cwd
         };
-        Process.Start(info);
+        var started = Process.Start(info);
+        if (started is null)
+            throw new InvalidOperationException("Process.Start returned null for " + path + " (cwd " + cwd + ").");
     }
 }

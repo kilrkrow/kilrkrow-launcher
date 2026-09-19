@@ -6,6 +6,7 @@ public interface IFileProbe
 {
     bool FileExists(string path);
     IEnumerable<string> EnumerateFiles(string directory, string searchPattern, SearchOption option);
+    long FileLength(string path);
 }
 
 public interface ISpecialFolders
@@ -29,6 +30,18 @@ public interface IUninstallRegistryProbe
 public sealed class PhysicalFileProbe : IFileProbe
 {
     public bool FileExists(string path) => File.Exists(path);
+
+    public long FileLength(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? new FileInfo(path).Length : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
 
     public IEnumerable<string> EnumerateFiles(string directory, string searchPattern, SearchOption option)
     {

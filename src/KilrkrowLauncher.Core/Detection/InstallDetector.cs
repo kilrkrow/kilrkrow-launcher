@@ -38,13 +38,13 @@ public sealed class InstallDetector
             .Cast<string>()
             .ToArray();
 
-        var portable = FindPreferredExe(PortableRepoDir(_folders, tool.Repo), preferredExes, hints);
+        var portable = FindPreferredExe(PortableRepoDir(_folders, tool.Repo), tool, preferredExes);
         if (portable is not null)
             return new InstallLookup { LaunchPath = portable, DetectedBy = "portable" };
 
         foreach (var root in WellKnownRoots(tool, hints))
         {
-            var hit = FindPreferredExe(root, preferredExes, hints);
+            var hit = FindPreferredExe(root, tool, preferredExes);
             if (hit is not null)
                 return new InstallLookup { LaunchPath = hit, DetectedBy = "well-known" };
         }
@@ -57,7 +57,7 @@ public sealed class InstallDetector
 
             if (!string.IsNullOrWhiteSpace(record.InstallLocation))
             {
-                var hit = FindPreferredExe(record.InstallLocation, preferredExes, hints);
+                var hit = FindPreferredExe(record.InstallLocation, tool, preferredExes);
                 if (hit is not null)
                     return new InstallLookup { LaunchPath = hit, DetectedBy = "registry" };
             }
@@ -98,40 +98,18 @@ public sealed class InstallDetector
         }
     }
 
-    private string? FindPreferredExe(string directory, IReadOnlyList<string> preferredExes, IReadOnlyList<string> hints)
+    private string? FindPreferredExe(string directory, CatalogTool tool, IReadOnlyList<string> preferredExes)
     {
         if (string.IsNullOrWhiteSpace(directory))
             return null;
 
-        foreach (var exe in preferredExes)
-        {
-            var direct = Path.Combine(directory, exe);
-            if (_files.FileExists(direct))
-                return direct;
-        }
-
-        var matches = _files
-            .EnumerateFiles(directory, "*.exe", SearchOption.AllDirectories)
-            .Where(p => !IsInstallerNoise(p))
-            .ToArray();
-
-        foreach (var exe in preferredExes)
-        {
-            var hit = matches.FirstOrDefault(p =>
-                string.Equals(Path.GetFileName(p), exe, StringComparison.OrdinalIgnoreCase));
-            if (hit is not null)
-                return hit;
-        }
-
-        return matches.FirstOrDefault(p => AssetNameHints.NameMatches(p, hints));
-    }
-
-    private static bool IsInstallerNoise(string path)
-    {
-        var name = Path.GetFileName(path);
-        return name.Contains("uninstall", StringComparison.OrdinalIgnoreCase)
-               || name.Contains("setup", StringComparison.OrdinalIgnoreCase)
-               || name.Contains("crash", StringComparison.OrdinalIgnoreCase);
+        var matches = _files.EnumerateFiles(directory, "*.exe", SearchOption.AllDirectories);
+        return PrimaryExePicker.Pick(
+            matches,
+            tool.Repo,
+            tool.DisplayName,
+            preferredExes,
+            _files.FileLength);
     }
 
     private static string? NormalizeIconPath(string? displayIcon)

@@ -139,10 +139,17 @@ public sealed class GitHubReleaseInstallProvider : IInstallProvider
         Directory.CreateDirectory(dir);
         ZipFile.ExtractToDirectory(zipPath, dir);
 
-        var preferred = tool.WindowsAsset.ExeEntryNames.Select(Path.GetFileName).ToArray();
-        var launch = Directory.EnumerateFiles(dir, "*.exe", SearchOption.AllDirectories)
-            .FirstOrDefault(p => preferred.Any(n => string.Equals(n, Path.GetFileName(p), StringComparison.OrdinalIgnoreCase)))
-            ?? Directory.EnumerateFiles(dir, "*.exe", SearchOption.AllDirectories).FirstOrDefault();
+        var preferred = tool.WindowsAsset.ExeEntryNames
+            .Select(Path.GetFileName)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Cast<string>()
+            .ToArray();
+        var launch = PrimaryExePicker.Pick(
+            Directory.EnumerateFiles(dir, "*.exe", SearchOption.AllDirectories),
+            tool.Repo,
+            tool.DisplayName,
+            preferred,
+            path => new FileInfo(path).Length);
 
         return new InstallResult
         {

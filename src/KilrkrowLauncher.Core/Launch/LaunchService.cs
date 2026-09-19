@@ -1,3 +1,5 @@
+using KilrkrowLauncher.Detection;
+
 namespace KilrkrowLauncher.Launch;
 
 public enum AlreadyRunningPolicy
@@ -28,7 +30,7 @@ public interface IProcessHost
 {
     bool TryFindRunning(IEnumerable<string> processNames, out RunningProcess process);
     void Focus(RunningProcess process);
-    void Start(string path, bool useShellExecute, string? arguments = null);
+    void Start(string path, bool useShellExecute, string? workingDirectory, string? arguments = null);
 }
 
 public sealed class LaunchService
@@ -49,7 +51,7 @@ public sealed class LaunchService
 
         var names = processNames
             .Select(n => Path.GetFileNameWithoutExtension(n))
-            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Where(n => !string.IsNullOrWhiteSpace(n) && !PrimaryExePicker.IsNoiseName(n + ".exe"))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
@@ -63,14 +65,23 @@ public sealed class LaunchService
             };
         }
 
+        var workingDirectory = Path.GetDirectoryName(path);
+        if (string.IsNullOrWhiteSpace(workingDirectory))
+            workingDirectory = Environment.CurrentDirectory;
+
         try
         {
-            _host.Start(path, useShellExecute: true);
-            return new LaunchResult { Kind = LaunchKind.Started, Message = "Started." };
+            _host.Start(path, useShellExecute: true, workingDirectory);
+            return new LaunchResult { Kind = LaunchKind.Started, Message = "Started " + path + "." };
         }
         catch (Exception ex)
         {
-            return new LaunchResult { Kind = LaunchKind.Failed, Message = ex.Message };
+            return new LaunchResult
+            {
+                Kind = LaunchKind.Failed,
+                Message = "Launch failed: " + path + " (working directory " + workingDirectory + "): "
+                          + ex.GetType().Name + ": " + ex.Message
+            };
         }
     }
 }

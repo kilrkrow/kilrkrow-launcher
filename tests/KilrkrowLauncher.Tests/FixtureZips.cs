@@ -25,6 +25,17 @@ internal static class FixtureZips
         });
     }
 
+    /// <summary>Sideclip-shaped payload: createdump listed first, then the real UI exe.</summary>
+    public static byte[] SideclipWithCreatedump()
+    {
+        return Build(zip =>
+        {
+            WriteBytes(zip, "createdump.exe", new byte[72]);
+            WriteBytes(zip, "Sideclip.exe", Enumerable.Repeat((byte)0x4D, 180).ToArray());
+            Write(zip, "Sideclip.dll", "dll");
+        });
+    }
+
     public static byte[] WindowsNamedSourceOnly()
         => Build(zip =>
         {
@@ -45,5 +56,12 @@ internal static class FixtureZips
         var entry = zip.CreateEntry(name, CompressionLevel.Fastest);
         using var stream = entry.Open();
         stream.Write(Encoding.UTF8.GetBytes(text));
+    }
+
+    private static void WriteBytes(ZipArchive zip, string name, byte[] bytes)
+    {
+        var entry = zip.CreateEntry(name, CompressionLevel.Fastest);
+        using var stream = entry.Open();
+        stream.Write(bytes);
     }
 }
