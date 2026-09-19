@@ -1,0 +1,24 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+[Dd]ebug/
+[Rr]elease/
+*.nupkg
+artifacts/
+TestResults/
+.dotnet/
+*.DotSettings.user
+publish/
+*.log
+.DS_Store
+Thumbs.db
+# Local token / settings must never be committed
+**/settings.json
+!src/**/settings.json
+.env
+*.user.json

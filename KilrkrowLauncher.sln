@@ -1,0 +1,43 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{ED0F3788-D5D3-4D49-AA21-DB9F4C010854}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KilrkrowLauncher.Core", "src\KilrkrowLauncher.Core\KilrkrowLauncher.Core.csproj", "{17E85289-B29F-431C-9424-63023C478592}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{1F86DB8A-E0C9-4101-8F62-DB8DB11F014C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KilrkrowLauncher.Tests", "tests\KilrkrowLauncher.Tests\KilrkrowLauncher.Tests.csproj", "{11AE918D-D190-43A8-95EC-890DECF04866}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KilrkrowLauncher", "src\KilrkrowLauncher\KilrkrowLauncher.csproj", "{C62A496F-F861-4145-A17F-AAFD1B9B8339}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{17E85289-B29F-431C-9424-63023C478592}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{17E85289-B29F-431C-9424-63023C478592}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{17E85289-B29F-431C-9424-63023C478592}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{17E85289-B29F-431C-9424-63023C478592}.Release|Any CPU.Build.0 = Release|Any CPU
+		{11AE918D-D190-43A8-95EC-890DECF04866}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{11AE918D-D190-43A8-95EC-890DECF04866}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{11AE918D-D190-43A8-95EC-890DECF04866}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{11AE918D-D190-43A8-95EC-890DECF04866}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C62A496F-F861-4145-A17F-AAFD1B9B8339}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C62A496F-F861-4145-A17F-AAFD1B9B8339}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C62A496F-F861-4145-A17F-AAFD1B9B8339}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C62A496F-F861-4145-A17F-AAFD1B9B8339}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{17E85289-B29F-431C-9424-63023C478592} = {ED0F3788-D5D3-4D49-AA21-DB9F4C010854}
+		{11AE918D-D190-43A8-95EC-890DECF04866} = {1F86DB8A-E0C9-4101-8F62-DB8DB11F014C}
+		{C62A496F-F861-4145-A17F-AAFD1B9B8339} = {ED0F3788-D5D3-4D49-AA21-DB9F4C010854}
+	EndGlobalSection
+EndGlobal
