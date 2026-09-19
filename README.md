@@ -1,6 +1,6 @@
 # kilrkrow Launcher
 
-Native **WPF** (`.NET 8`, same stack as [sideclip](https://github.com/kilrkrow/sideclip)) picker for public **kilrkrow** Windows tools. It is not a web/Electron shell and it does not auto-launch anything on startup.
+Native **WPF** (`.NET 10`, same stack as [sideclip](https://github.com/kilrkrow/sideclip)) picker for public **kilrkrow** Windows tools. It is not a web/Electron shell and it does not auto-launch anything on startup.
 
 Public catalog works **without a GitHub token**. An optional token field is stored only under `%LocalAppData%\KilrkrowLauncher\settings.json` and is never committed.
 
@@ -68,7 +68,7 @@ dotnet test tests/KilrkrowLauncher.Tests/KilrkrowLauncher.Tests.csproj
 .\scripts\publish.ps1
 ```
 
-`dotnet test` is TFM `net8.0` and runs on Linux/macOS/Windows. The WPF project is `net8.0-windows`.
+`dotnet test` is TFM `net10.0` and runs on Linux/macOS/Windows. The WPF project is `net10.0-windows`. `global.json` pins SDK `10.0.100` with `rollForward: latestFeature` so installed 10.0.108 / 10.0.203 bands work.
 
 ## Smoke notes (greenfield)
 

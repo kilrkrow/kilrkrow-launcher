@@ -1,4 +1,4 @@
-# Requires Windows + .NET 8 SDK. Produces a self-contained win-x64 folder.
+# Requires Windows + .NET 10 SDK. Produces a self-contained win-x64 folder.
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $out = Join-Path $root "artifacts\win-x64"
