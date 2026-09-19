@@ -20,7 +20,7 @@ The manifest `launcher` field is this repo's latest Windows release (self-update
 
 ## Catalog rules
 
-A public, non-fork, non-archived repo is listed only when **`GET /repos/{owner}/{repo}/releases/latest`** has at least one entry in **`assets[]`** that is a Windows payload:
+A public, non-fork, non-archived repo is listed only when it has a GitHub **Release with a Windows asset**. Discovery walks the first page of **`GET /repos/{owner}/{repo}/releases`** (newest-first, drafts skipped) and picks the **newest tagged release** whose **`assets[]`** contain a Windows payload. If the newest tag is asset-less, an older qualifying release is used. Repos with no releases (or only empty / non-Windows assets) stay out:
 
 | Asset | Included? |
 | --- | --- |
@@ -34,7 +34,7 @@ A public, non-fork, non-archived repo is listed only when **`GET /repos/{owner}/
 
 When several Windows assets exist, the picker prefers MSI, then setup exe, then an **app/gui** zip over a **cli** zip.
 
-Verified 2026-09-19 against the live anonymous API: **win-service-buddy** `v0.2.0` qualifies (`wsbuddy-app-win-x64-v0.2.0.zip` contains `WinServiceBuddy.App.exe`). **sideclip** and **netpulse** have no latest release. **voltdesk** has a latest release with **empty** `assets[]` (source zipball does not count).
+Verified 2026-09-19 against the live anonymous API: **win-service-buddy** `v0.2.0` qualifies (`wsbuddy-app-win-x64-v0.2.0.zip` contains `WinServiceBuddy.App.exe`). **voltdesk** newest tags (`v1.1.0` … `v1.0.3`) have empty `assets[]`; catalog uses **`v1.0.2`** (`VoltDesk.exe`). **sideclip** and **netpulse** have zero releases and stay out until Guy publishes a Release with a Windows asset.
 
 Unit tests in `tests/KilrkrowLauncher.Tests` cover the filter with fixture zips so source-only archives cannot sneak in.
 
@@ -87,7 +87,7 @@ dotnet test tests/KilrkrowLauncher.Tests/KilrkrowLauncher.Tests.csproj
 ## Smoke notes (greenfield)
 
 1. Cold start shows the picker (nothing auto-launches).
-2. Refresh catalog **without** a token: after Pages is enabled, at least **win-service-buddy** appears from `catalog.json`.
+2. Refresh catalog **without** a token: after Pages is enabled and Catalog is re-run, **win-service-buddy** and **voltdesk** (`v1.0.2`) appear from `catalog.json`. Sideclip/NetPulse stay out until they have a Release with a Windows asset.
 3. An installed row: **Launch** starts it; a second Launch **focuses** the existing window.
 4. Check a missing row and an installed row, then **Launch all**: only the installed row starts.
 5. **Download & install** on a missing zip: progress appears; Cancel during download does not crash.

@@ -8,25 +8,39 @@ namespace KilrkrowLauncher.Tests;
 public sealed class GitHubCatalogClientTests
 {
     [Fact]
-    public async Task SkipsPrivateForksArchived_NoRelease_EmptyAssets_SourceZip_AndSelfRepo()
+    public async Task WalksRecentReleases_OlderAssetWins_NoReleaseExcluded_LatestPreferred()
     {
         var appZip = FixtureZips.WithExe("WinServiceBuddy.App.exe");
         var sourceZip = FixtureZips.SourceOnly();
         var handler = new ScriptedHandler
         {
             ["https://api.github.com/users/kilrkrow/repos?type=public&per_page=100&page=1"] = ReposJson(),
-            ["https://api.github.com/repos/kilrkrow/sideclip/releases/latest"] = NotFound(),
-            ["https://api.github.com/repos/kilrkrow/voltdesk/releases/latest"] = ReleaseJson("v1.1.0", "[]"),
-            ["https://api.github.com/repos/kilrkrow/obsidian-bible-verse/releases/latest"] =
-                ReleaseJson("1.9.2", """[{"name":"main.js","browser_download_url":"https://example.test/main.js","size":10}]"""),
-            ["https://api.github.com/repos/kilrkrow/sourcey/releases/latest"] =
-                ReleaseJson("v1", """[{"name":"source-win-x64.zip","browser_download_url":"https://example.test/source-win-x64.zip","size":800}]"""),
+            ["https://api.github.com/repos/kilrkrow/sideclip/releases?per_page=30"] = EmptyList(),
+            ["https://api.github.com/repos/kilrkrow/netpulse/releases?per_page=30"] = EmptyList(),
+            ["https://api.github.com/repos/kilrkrow/voltdesk/releases?per_page=30"] = ReleasesJson(
+                """
+                [
+                  {"tag_name":"v1.1.0","html_url":"https://github.com/kilrkrow/voltdesk/releases/tag/v1.1.0","draft":false,"assets":[]},
+                  {"tag_name":"v1.0.3","html_url":"https://github.com/kilrkrow/voltdesk/releases/tag/v1.0.3","draft":false,"assets":[]},
+                  {"tag_name":"v1.0.2","html_url":"https://github.com/kilrkrow/voltdesk/releases/tag/v1.0.2","draft":false,"assets":[{"name":"VoltDesk.exe","browser_download_url":"https://example.test/VoltDesk.exe","size":4096}]}
+                ]
+                """),
+            ["https://api.github.com/repos/kilrkrow/obsidian-bible-verse/releases?per_page=30"] =
+                ReleaseList("1.9.2", """[{"name":"main.js","browser_download_url":"https://example.test/main.js","size":10}]"""),
+            ["https://api.github.com/repos/kilrkrow/sourcey/releases?per_page=30"] =
+                ReleaseList("v1", """[{"name":"source-win-x64.zip","browser_download_url":"https://example.test/source-win-x64.zip","size":800}]"""),
             ["https://example.test/source-win-x64.zip"] = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(sourceZip)
             },
-            ["https://api.github.com/repos/kilrkrow/win-service-buddy/releases/latest"] =
-                ReleaseJson("v0.2.0", """[{"name":"wsbuddy-app-win-x64-v0.2.0.zip","browser_download_url":"https://example.test/app.zip","size":1200},{"name":"wsbuddy.0.2.0.nupkg","browser_download_url":"https://example.test/p.nupkg","size":40}]"""),
+            ["https://api.github.com/repos/kilrkrow/win-service-buddy/releases?per_page=30"] =
+                ReleasesJson(
+                    """
+                    [
+                      {"tag_name":"v0.2.0","html_url":"https://github.com/kilrkrow/win-service-buddy/releases/tag/v0.2.0","draft":false,"assets":[{"name":"wsbuddy-app-win-x64-v0.2.0.zip","browser_download_url":"https://example.test/app.zip","size":1200},{"name":"wsbuddy.0.2.0.nupkg","browser_download_url":"https://example.test/p.nupkg","size":40}]},
+                      {"tag_name":"v0.1.0","html_url":"https://github.com/kilrkrow/win-service-buddy/releases/tag/v0.1.0","draft":false,"assets":[{"name":"old.exe","browser_download_url":"https://example.test/old.exe","size":10}]}
+                    ]
+                    """),
             ["https://example.test/app.zip"] = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(appZip)
@@ -37,10 +51,64 @@ public sealed class GitHubCatalogClientTests
         var client = GitHubCatalogClient.Create(http);
         var tools = await client.LoadPublicWindowsToolsAsync();
 
+        Assert.Equal(2, tools.Count);
+        Assert.Equal("voltdesk", tools[0].Repo);
+        Assert.Equal("v1.0.2", tools[0].TagName);
+        Assert.Equal("VoltDesk.exe", tools[0].WindowsAsset.Asset.Name);
+        Assert.Equal("win-service-buddy", tools[1].Repo);
+        Assert.Equal("v0.2.0", tools[1].TagName);
+        Assert.Contains(tools[1].WindowsAsset.ExeEntryNames, n => n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task SkipsDraftEvenWhenItHasWindowsAsset()
+    {
+        var handler = new ScriptedHandler
+        {
+            ["https://api.github.com/users/kilrkrow/repos?type=public&per_page=100&page=1"] =
+                new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        """[{"name":"drafty","private":false,"fork":false,"archived":false,"html_url":"https://github.com/kilrkrow/drafty"}]""",
+                        Encoding.UTF8, "application/json")
+                },
+            ["https://api.github.com/repos/kilrkrow/drafty/releases?per_page=30"] = ReleasesJson(
+                """
+                [
+                  {"tag_name":"v2.0.0","html_url":"https://github.com/x","draft":true,"assets":[{"name":"Draft.exe","browser_download_url":"https://example.test/Draft.exe","size":1}]},
+                  {"tag_name":"v1.0.0","html_url":"https://github.com/x","draft":false,"assets":[{"name":"Ship.exe","browser_download_url":"https://example.test/Ship.exe","size":2}]}
+                ]
+                """)
+        };
+
+        var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com/") };
+        var client = GitHubCatalogClient.Create(http);
+        var tools = await client.LoadPublicWindowsToolsAsync();
         Assert.Single(tools);
-        Assert.Equal("win-service-buddy", tools[0].Repo);
-        Assert.Equal("v0.2.0", tools[0].TagName);
-        Assert.Contains(tools[0].WindowsAsset.ExeEntryNames, n => n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("v1.0.0", tools[0].TagName);
+        Assert.Equal("Ship.exe", tools[0].WindowsAsset.Asset.Name);
+    }
+
+    [Fact]
+    public async Task SelfLauncher_UsesNewestNonDraftWithWindowsAsset()
+    {
+        var handler = new ScriptedHandler
+        {
+            ["https://api.github.com/repos/kilrkrow/kilrkrow-launcher/releases?per_page=30"] = ReleasesJson(
+                """
+                [
+                  {"tag_name":"v0.2.0","html_url":"https://github.com/x","draft":false,"assets":[]},
+                  {"tag_name":"v0.1.0","html_url":"https://github.com/x","draft":false,"assets":[{"name":"KilrkrowLauncher.exe","browser_download_url":"https://example.test/KilrkrowLauncher.exe","size":99}]}
+                ]
+                """)
+        };
+        var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com/") };
+        var client = GitHubCatalogClient.Create(http);
+        var launcher = await client.LoadSelfLauncherAsync();
+        Assert.NotNull(launcher);
+        Assert.Equal("v0.1.0", launcher.Tag);
+        Assert.Equal("https://example.test/KilrkrowLauncher.exe", launcher.AssetUrl);
+        Assert.Equal(99, launcher.Size);
     }
 
     [Fact]
@@ -73,6 +141,7 @@ public sealed class GitHubCatalogClientTests
               {"name":"forked","private":false,"fork":true,"archived":false,"html_url":"https://github.com/kilrkrow/forked"},
               {"name":"old","private":false,"fork":false,"archived":true,"html_url":"https://github.com/kilrkrow/old"},
               {"name":"sideclip","private":false,"fork":false,"archived":false,"description":"clipboard","html_url":"https://github.com/kilrkrow/sideclip"},
+              {"name":"netpulse","private":false,"fork":false,"archived":false,"html_url":"https://github.com/kilrkrow/netpulse"},
               {"name":"voltdesk","private":false,"fork":false,"archived":false,"html_url":"https://github.com/kilrkrow/voltdesk"},
               {"name":"obsidian-bible-verse","private":false,"fork":false,"archived":false,"html_url":"https://github.com/kilrkrow/obsidian-bible-verse"},
               {"name":"sourcey","private":false,"fork":false,"archived":false,"html_url":"https://github.com/kilrkrow/sourcey"},
@@ -85,17 +154,14 @@ public sealed class GitHubCatalogClientTests
         };
     }
 
-    private static HttpResponseMessage ReleaseJson(string tag, string assetsJson)
-    {
-        var json = "{\"tag_name\":\"" + tag + "\",\"html_url\":\"https://github.com/x\",\"assets\":" + assetsJson + "}";
-        return new HttpResponseMessage(HttpStatusCode.OK)
-        {
-            Content = new StringContent(json, Encoding.UTF8, "application/json")
-        };
-    }
+    private static HttpResponseMessage ReleaseList(string tag, string assetsJson)
+        => ReleasesJson("[{\"tag_name\":\"" + tag + "\",\"html_url\":\"https://github.com/x\",\"draft\":false,\"assets\":" + assetsJson + "}]");
 
-    private static HttpResponseMessage NotFound()
-        => new(HttpStatusCode.NotFound) { Content = new StringContent("{\"message\":\"Not Found\"}", Encoding.UTF8, "application/json") };
+    private static HttpResponseMessage ReleasesJson(string json)
+        => new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+
+    private static HttpResponseMessage EmptyList()
+        => ReleasesJson("[]");
 
     private sealed class ScriptedHandler : HttpMessageHandler
     {

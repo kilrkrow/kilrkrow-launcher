@@ -8,8 +8,9 @@ public interface IZipEntryReader
 }
 
 /// <summary>
-/// Catalog rule: a repo is included only when its *latest release assets[]* contain
-/// a Windows payload. GitHub source zipballs/tarballs are never assets and never qualify.
+/// Catalog rule: a repo is included when the newest non-draft release whose
+/// <c>assets[]</c> contain a Windows payload. GitHub source zipballs/tarballs
+/// are never assets and never qualify.
 /// </summary>
 public sealed class WindowsAssetFilter
 {

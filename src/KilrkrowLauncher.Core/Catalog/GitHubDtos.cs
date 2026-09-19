@@ -19,6 +19,7 @@ internal sealed class GitHubReleaseDto
 {
     public string TagName { get; set; } = "";
     public string HtmlUrl { get; set; } = "";
+    public bool Draft { get; set; }
     public List<GitHubAssetDto> Assets { get; set; } = [];
 }
 

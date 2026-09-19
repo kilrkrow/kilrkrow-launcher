@@ -32,42 +32,22 @@ public sealed class GitHubCatalogClient
     }
 
     /// <summary>
-    /// Latest Windows asset for this launcher repo. Used for the manifest
-    /// <c>launcher</c> field; SelfRepo is not skipped here.
+    /// Newest non-draft release on this launcher repo that has a Windows asset.
+    /// Used for the manifest <c>launcher</c> field; SelfRepo is not skipped here.
     /// </summary>
     public async Task<CatalogLauncherInfo?> LoadSelfLauncherAsync(
         string owner = DefaultOwner,
         CancellationToken cancellationToken = default)
     {
-        GitHubReleaseDto release;
-        try
-        {
-            release = await _api.GetJsonAsync<GitHubReleaseDto>(
-                "repos/" + owner + "/" + SelfRepo + "/releases/latest",
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (GitHubApiException ex) when (ex.StatusCode == 404)
-        {
-            return null;
-        }
-
-        var assets = (release.Assets ?? []).Select(a => new ReleaseAsset
-        {
-            Name = a.Name,
-            BrowserDownloadUrl = a.BrowserDownloadUrl,
-            Size = a.Size,
-            ContentType = a.ContentType
-        }).ToArray();
-
-        var pick = await _filter.PickAsync(assets, cancellationToken).ConfigureAwait(false);
-        if (pick is null)
+        var hit = await PickNewestWindowsReleaseAsync(owner, SelfRepo, cancellationToken).ConfigureAwait(false);
+        if (hit is null)
             return null;
 
         return new CatalogLauncherInfo
         {
-            Tag = release.TagName,
-            AssetUrl = pick.Asset.BrowserDownloadUrl,
-            Size = pick.Asset.Size
+            Tag = hit.Value.Release.TagName,
+            AssetUrl = hit.Value.Pick.Asset.BrowserDownloadUrl,
+            Size = hit.Value.Pick.Asset.Size
         };
     }
 
@@ -86,17 +66,56 @@ public sealed class GitHubCatalogClient
             if (string.Equals(repo.Name, SelfRepo, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            GitHubReleaseDto release;
-            try
-            {
-                release = await _api.GetJsonAsync<GitHubReleaseDto>(
-                    "repos/" + owner + "/" + repo.Name + "/releases/latest",
-                    cancellationToken).ConfigureAwait(false);
-            }
-            catch (GitHubApiException ex) when (ex.StatusCode == 404)
-            {
+            var hit = await PickNewestWindowsReleaseAsync(owner, repo.Name, cancellationToken).ConfigureAwait(false);
+            if (hit is null)
                 continue;
-            }
+
+            tools.Add(new CatalogTool
+            {
+                Owner = owner,
+                Repo = repo.Name,
+                DisplayName = Humanize(repo.Name),
+                Description = string.IsNullOrWhiteSpace(repo.Description) ? null : repo.Description.Trim(),
+                TagName = hit.Value.Release.TagName,
+                HtmlUrl = string.IsNullOrWhiteSpace(hit.Value.Release.HtmlUrl) ? repo.HtmlUrl : hit.Value.Release.HtmlUrl,
+                WindowsAsset = hit.Value.Pick
+            });
+        }
+
+        return tools
+            .OrderBy(t => t.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// First page of <c>GET /repos/{owner}/{repo}/releases</c> (newest-first).
+    /// Skips drafts; picks the newest release whose <c>assets[]</c> pass
+    /// <see cref="WindowsAssetFilter"/> (zip-contains-exe unchanged).
+    /// </summary>
+    internal const int RecentReleasesPageSize = 30;
+
+    private async Task<(GitHubReleaseDto Release, WindowsAssetPick Pick)?> PickNewestWindowsReleaseAsync(
+        string owner,
+        string repo,
+        CancellationToken cancellationToken)
+    {
+        List<GitHubReleaseDto> releases;
+        try
+        {
+            releases = await _api.GetJsonAsync<List<GitHubReleaseDto>>(
+                "repos/" + owner + "/" + repo + "/releases?per_page=" + RecentReleasesPageSize,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (GitHubApiException ex) when (ex.StatusCode == 404)
+        {
+            return null;
+        }
+
+        foreach (var release in releases)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (release.Draft)
+                continue;
 
             var assets = (release.Assets ?? []).Select(a => new ReleaseAsset
             {
@@ -107,24 +126,11 @@ public sealed class GitHubCatalogClient
             }).ToArray();
 
             var pick = await _filter.PickAsync(assets, cancellationToken).ConfigureAwait(false);
-            if (pick is null)
-                continue;
-
-            tools.Add(new CatalogTool
-            {
-                Owner = owner,
-                Repo = repo.Name,
-                DisplayName = Humanize(repo.Name),
-                Description = string.IsNullOrWhiteSpace(repo.Description) ? null : repo.Description.Trim(),
-                TagName = release.TagName,
-                HtmlUrl = string.IsNullOrWhiteSpace(release.HtmlUrl) ? repo.HtmlUrl : release.HtmlUrl,
-                WindowsAsset = pick
-            });
+            if (pick is not null)
+                return (release, pick);
         }
 
-        return tools
-            .OrderBy(t => t.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        return null;
     }
 
     private async Task<List<GitHubRepoDto>> ListPublicReposAsync(string owner, CancellationToken cancellationToken)
