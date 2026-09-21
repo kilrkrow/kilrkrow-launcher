@@ -1,0 +1,48 @@
+name: Catalog
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build catalog.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p catalog-site
+          dotnet run --project tools/CatalogBuilder -- --out catalog-site/catalog.json
+          cat > catalog-site/index.html << 'HTML'
+          <!doctype html><meta charset="utf-8"><title>kilrkrow Launcher catalog</title>
+          <p><a href="catalog.json">catalog.json</a></p>
+          HTML
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: catalog-site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
